@@ -1,0 +1,602 @@
+// ================================================================
+//  Prisma Schema
+//  Project  : Multi-Tenant SaaS Collaboration Platform (Simplified)
+//  Source   : Advanced-SaaS-ERD-Simplified.drawio
+//  Database : PostgreSQL
+//  Tables   : 19  |  Edges : 25  |  Enums : 8
+//
+//  Key simplification from previous version:
+//  Role, Permission, RolePermission tables removed.
+//  User carries a platform-level `role` (UserRole enum).
+//  Membership and Invitation carry a org-level `role` (MemberRole enum).
+// ================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// / ────────────────────────────────────────────────────────────────
+// 1. USER
+// ERD  : t_user  (x=30, y=40)
+// Edges: e1  → Organization.ownerId
+//        e2  → Membership.userId
+//        e3  → ProjectMember.userId
+//        e4  → Task.assignedTo
+//        e5  → TaskComment.userId
+//        e6  → TaskAttachment.uploadedBy
+//        e7  → Notification.userId
+//        e8  → ActivityLog.actorId
+//        e9  → File.uploadedBy
+// ────────────────────────────────────────────────────────────────
+
+model User {
+  id                 String     @id @default(cuid()) @map("id")
+  name               String
+  email              String
+  emailVerified      Boolean    @default(false)
+  password           String     @map("password")
+  role               UserRole   @default(MEMBER) @map("role")
+  status             UserStatus @default(ACTIVE)
+  needPasswordChange Boolean    @default(false)
+  isDeleted          Boolean    @default(false)
+  deletedAt          DateTime?
+  image              String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  // Back-relations
+  sessions           Session[]
+  accounts           Account[]
+  ownedOrganizations Organization[]   @relation("OrgOwner")
+  memberships        Membership[]
+  projectMembers     ProjectMember[]
+  assignedTasks      Task[]           @relation("TaskAssignee")
+  taskComments       TaskComment[]
+  taskAttachments    TaskAttachment[] @relation("AttachmentUploader")
+  notifications      Notification[]
+  activityLogs       ActivityLog[]    @relation("ActivityActor")
+  files              File[]           @relation("FileUploader")
+
+  @@index([email], map: "idx_users_email")
+  @@index([role], map: "idx_users_role")
+  @@index([createdAt], map: "idx_users_created_at")
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 2. ORGANIZATION  (Tenant root)
+// ERD  : t_org  (x=620, y=40)
+// Edges: e1  ← User.ownerId
+//        e10 → Membership.organizationId
+//        e11 → Invitation.organizationId
+//        e12 → Project.organizationId
+//        e13 → ActivityLog.organizationId
+//        e14 → ApiKey.organizationId
+//        e22 → Subscription.organizationId  (1:1)
+// ────────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid()) @map("id")
+  ownerId   String   @map("owner_id")
+  name      String   @map("name")
+  slug      String   @unique @map("slug")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Back-relations
+  owner        User          @relation("OrgOwner", fields: [ownerId], references: [id])
+  memberships  Membership[]
+  invitations  Invitation[]
+  projects     Project[]
+  activityLogs ActivityLog[]
+  apiKeys      ApiKey[]
+  subscription Subscription? // 1:1 — enforced by @unique on Subscription.organizationId
+
+  @@index([ownerId], map: "idx_organizations_owner_id")
+  @@map("organizations")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 3. MEMBERSHIP  (Users ↔ Organizations, carries org-level role)
+// ERD  : t_member  (x=30, y=350)
+// Edges: e2  ← User.id
+//        e10 ← Organization.id
+// Note : roleId FK removed — role is now a MemberRole enum field.
+// ────────────────────────────────────────────────────────────────
+
+model Membership {
+  id             String     @id @default(cuid()) @map("id")
+  userId         String     @map("user_id")
+  organizationId String     @map("organization_id")
+  role           MemberRole @default(MEMBER) @map("role")
+  joinedAt       DateTime   @default(now()) @map("joined_at")
+
+  // Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId], map: "uq_membership_user_org")
+  @@index([userId], map: "idx_memberships_user_id")
+  @@index([organizationId], map: "idx_memberships_organization_id")
+  @@index([role], map: "idx_memberships_role")
+  @@map("memberships")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 4. INVITATION
+// ERD  : t_invite  (x=30, y=570)
+// Edges: e11 ← Organization.id
+// Note : roleId FK removed — invited role is now a MemberRole enum.
+// ────────────────────────────────────────────────────────────────
+
+model Invitation {
+  id             String     @id @default(cuid()) @map("id")
+  organizationId String     @map("organization_id")
+  email          String     @map("email")
+  role           MemberRole @default(MEMBER) @map("role")
+  token          String     @unique @default(cuid()) @map("token")
+  acceptedAt     DateTime?  @map("accepted_at")
+  expiresAt      DateTime?  @map("expires_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId], map: "idx_invitations_organization_id")
+  @@index([email], map: "idx_invitations_email")
+  @@index([token], map: "idx_invitations_token")
+  @@index([expiresAt], map: "idx_invitations_expires_at")
+  @@map("invitations")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 5. PROJECT
+// ERD  : t_proj  (x=620, y=310)
+// Edges: e12 ← Organization.id
+//        e15 → ProjectMember.projectId
+//        e16 → Task.projectId
+//        e17 → Label.projectId
+// ────────────────────────────────────────────────────────────────
+
+model Project {
+  id             String   @id @default(cuid()) @map("id")
+  organizationId String   @map("organization_id")
+  name           String   @map("name")
+  description    String?  @map("description")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectMembers ProjectMember[]
+  tasks          Task[]
+  labels         Label[]
+
+  @@index([organizationId], map: "idx_projects_organization_id")
+  @@index([createdBy], map: "idx_projects_created_by")
+  @@map("projects")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 6. PROJECT MEMBER  (pivot — Projects ↔ Users, carries project role)
+// ERD  : t_projmem  (x=1210, y=40)
+// Edges: e3  ← User.id
+//        e15 ← Project.id
+// ────────────────────────────────────────────────────────────────
+
+model ProjectMember {
+  id        String            @id @default(cuid()) @map("id")
+  projectId String            @map("project_id")
+  userId    String            @map("user_id")
+  role      ProjectMemberRole @default(CONTRIBUTOR) @map("role")
+  joinedAt  DateTime          @default(now()) @map("joined_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId], map: "uq_project_member_user")
+  @@index([projectId], map: "idx_project_members_project_id")
+  @@index([userId], map: "idx_project_members_user_id")
+  @@index([role], map: "idx_project_members_role")
+  @@map("project_members")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 7. TASK
+// ERD  : t_task  (x=1210, y=280)
+// Edges: e4  ← User.id (assignee, optional)
+//        e16 ← Project.id
+//        e18 → TaskComment.taskId
+//        e19 → TaskAttachment.taskId
+//        e20 → TaskLabel.taskId
+// ────────────────────────────────────────────────────────────────
+
+model Task {
+  id         String       @id @default(cuid()) @map("id")
+  projectId  String       @map("project_id")
+  assignedTo String?      @map("assigned_to")
+  title      String       @map("title")
+  status     TaskStatus   @default(TODO) @map("status")
+  priority   TaskPriority @default(MEDIUM) @map("priority")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?            @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  comments    TaskComment[]
+  attachments TaskAttachment[]
+  taskLabels  TaskLabel[]
+
+  @@index([projectId], map: "idx_tasks_project_id")
+  @@index([assignedTo], map: "idx_tasks_assigned_to")
+  @@index([status], map: "idx_tasks_status")
+  @@index([priority], map: "idx_tasks_priority")
+  @@index([createdAt], map: "idx_tasks_created_at")
+  @@map("tasks")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 8. TASK COMMENT
+// ERD  : t_tcomment  (x=1210, y=620)
+// Edges: e5  ← User.id
+//        e18 ← Task.id
+// ────────────────────────────────────────────────────────────────
+
+model TaskComment {
+  id        String   @id @default(cuid()) @map("id")
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  message   String   @map("message")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId], map: "idx_task_comments_task_id")
+  @@index([userId], map: "idx_task_comments_user_id")
+  @@index([createdAt], map: "idx_task_comments_created_at")
+  @@map("task_comments")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 9. TASK ATTACHMENT
+// ERD  : t_tattach  (x=1210, y=870)
+// Edges: e6  ← User.id (uploader)
+//        e19 ← Task.id
+// ────────────────────────────────────────────────────────────────
+
+model TaskAttachment {
+  id         String   @id @default(cuid()) @map("id")
+  taskId     String   @map("task_id")
+  uploadedBy String   @map("uploaded_by")
+  fileUrl    String   @map("file_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploader User @relation("AttachmentUploader", fields: [uploadedBy], references: [id])
+
+  @@index([taskId], map: "idx_task_attachments_task_id")
+  @@index([uploadedBy], map: "idx_task_attachments_uploaded_by")
+  @@map("task_attachments")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 10. LABEL
+// ERD  : t_label  (x=620, y=620)
+// Edges: e17 ← Project.id
+//        e21 → TaskLabel.labelId
+// ────────────────────────────────────────────────────────────────
+
+model Label {
+  id        String @id @default(cuid()) @map("id")
+  projectId String @map("project_id")
+  name      String @map("name")
+  color     String @map("color") // hex — e.g. "#3498db"
+
+  // Relations
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskLabels TaskLabel[]
+
+  @@unique([projectId, name], map: "uq_label_project_name")
+  @@index([projectId], map: "idx_labels_project_id")
+  @@map("labels")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 11. TASK LABEL  (pivot — Tasks ↔ Labels, composite PK)
+// ERD  : t_tlabel  (x=620, y=810)
+// Edges: e20 ← Task.id
+//        e21 ← Label.id
+// ────────────────────────────────────────────────────────────────
+
+model TaskLabel {
+  taskId  String @map("task_id")
+  labelId String @map("label_id")
+
+  // Relations
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([taskId], map: "idx_task_labels_task_id")
+  @@index([labelId], map: "idx_task_labels_label_id")
+  @@map("task_labels")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 12. NOTIFICATION
+// ERD  : t_notif  (x=30, y=840)
+// Edges: e7 ← User.id
+// ────────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid()) @map("id")
+  userId    String           @map("user_id")
+  type      NotificationType @default(GENERAL) @map("type")
+  title     String           @map("title")
+  body      String?          @map("body")
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_notifications_user_id")
+  @@index([isRead], map: "idx_notifications_is_read")
+  @@index([type], map: "idx_notifications_type")
+  @@index([createdAt], map: "idx_notifications_created_at")
+  @@map("notifications")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 13. ACTIVITY LOG  (immutable audit trail)
+// ERD  : t_actlog  (x=30, y=1110)
+// Edges: e8  ← User.id (actor)
+//        e13 ← Organization.id
+// ────────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id             String   @id @default(cuid()) @map("id")
+  organizationId String   @map("organization_id")
+  actorId        String   @map("actor_id")
+  action         String   @map("action") // e.g. "created_task", "invited_member"
+  metadata       Json?    @map("metadata") // e.g. { taskId, oldStatus, newStatus }
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User         @relation("ActivityActor", fields: [actorId], references: [id])
+
+  @@index([organizationId], map: "idx_activity_logs_organization_id")
+  @@index([actorId], map: "idx_activity_logs_actor_id")
+  @@index([action], map: "idx_activity_logs_action")
+  @@index([createdAt], map: "idx_activity_logs_created_at")
+  @@map("activity_logs")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 14. FILE  (generic uploaded file metadata)
+// ERD  : t_file  (x=1210, y=1110)
+// Edges: e9 ← User.id (uploader)
+// ────────────────────────────────────────────────────────────────
+
+model File {
+  id         String   @id @default(cuid()) @map("id")
+  uploadedBy String   @map("uploaded_by")
+  url        String   @map("url")
+  mimeType   String?  @map("mime_type")
+  sizeBytes  Int?     @map("size_bytes")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  uploader User @relation("FileUploader", fields: [uploadedBy], references: [id])
+
+  @@index([uploadedBy], map: "idx_files_uploaded_by")
+  @@index([mimeType], map: "idx_files_mime_type")
+  @@map("files")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 15. API KEY
+// ERD  : t_apikey  (x=1210, y=1340)
+// Edges: e14 ← Organization.id
+// ────────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id             String    @id @default(cuid()) @map("id")
+  organizationId String    @map("organization_id")
+  name           String    @map("name")
+  keyHash        String    @unique @map("key_hash") // hashed — plain key shown once on creation only
+  keyPrefix      String    @map("key_prefix") // e.g. "sk_live_abc1..." shown in UI
+  isActive       Boolean   @default(true) @map("is_active")
+  lastUsedAt     DateTime? @map("last_used_at")
+  expiresAt      DateTime? @map("expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId], map: "idx_api_keys_organization_id")
+  @@index([isActive], map: "idx_api_keys_is_active")
+  @@index([expiresAt], map: "idx_api_keys_expires_at")
+  @@map("api_keys")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 16. PLAN  (subscription product catalog)
+// ERD  : t_plan  (x=1800, y=40)
+// Edges: e23 → Subscription.planId
+//        e25 → PlanFeature.planId
+// ────────────────────────────────────────────────────────────────
+
+model Plan {
+  id           String   @id @default(cuid()) @map("id")
+  name         String   @map("name") // e.g. "Free", "Pro", "Enterprise"
+  slug         String   @unique @map("slug") // e.g. "free", "pro", "enterprise"
+  description  String?  @map("description")
+  priceMonthly Decimal  @map("price_monthly") @db.Decimal(10, 2)
+  priceYearly  Decimal  @map("price_yearly") @db.Decimal(10, 2)
+  currency     String   @default("USD") @map("currency")
+  trialDays    Int      @default(14) @map("trial_days")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Back-relations
+  subscriptions Subscription[]
+  features      PlanFeature[]
+
+  @@index([isActive], map: "idx_plans_is_active")
+  @@index([slug], map: "idx_plans_slug")
+  @@map("plans")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 17. SUBSCRIPTION  (one per Organization — 1:1)
+// ERD  : t_sub  (x=1800, y=430)
+// Edges: e22 ← Organization.id  (enforced via @unique)
+//        e23 ← Plan.id
+//        e24 → Invoice.subscriptionId
+// ────────────────────────────────────────────────────────────────
+
+model Subscription {
+  id                   String             @id @default(cuid()) @map("id")
+  organizationId       String             @unique @map("organization_id")
+  planId               String             @map("plan_id")
+  status               SubscriptionStatus @default(TRIALING) @map("status")
+  billingCycle         BillingCycle       @default(MONTHLY) @map("billing_cycle")
+  currentPeriodStart   DateTime           @map("current_period_start")
+  currentPeriodEnd     DateTime           @map("current_period_end")
+  trialEndsAt          DateTime?          @map("trial_ends_at")
+  canceledAt           DateTime?          @map("canceled_at")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id])
+  invoices     Invoice[]
+
+  @@index([planId], map: "idx_subscriptions_plan_id")
+  @@index([status], map: "idx_subscriptions_status")
+  @@index([currentPeriodEnd], map: "idx_subscriptions_period_end")
+  @@index([trialEndsAt], map: "idx_subscriptions_trial_ends_at")
+  @@map("subscriptions")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 18. INVOICE  (billing record per period)
+// ERD  : t_invoice  (x=1800, y=1010)
+// Edges: e24 ← Subscription.id
+// ────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id              String        @id @default(cuid()) @map("id")
+  subscriptionId  String        @map("subscription_id")
+  status          InvoiceStatus @default(DRAFT) @map("status")
+  amountDue       Decimal       @map("amount_due") @db.Decimal(10, 2)
+  amountPaid      Decimal       @default(0) @map("amount_paid") @db.Decimal(10, 2)
+  currency        String        @default("USD") @map("currency")
+  periodStart     DateTime      @map("period_start")
+  periodEnd       DateTime      @map("period_end")
+  dueDate         DateTime?     @map("due_date")
+  paidAt          DateTime?     @map("paid_at")
+  stripeInvoiceId String?       @unique @map("stripe_invoice_id")
+  invoicePdfUrl   String?       @map("invoice_pdf_url")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId], map: "idx_invoices_subscription_id")
+  @@index([status], map: "idx_invoices_status")
+  @@index([paidAt], map: "idx_invoices_paid_at")
+  @@index([dueDate], map: "idx_invoices_due_date")
+  @@map("invoices")
+}
+
+// ────────────────────────────────────────────────────────────────
+// 19. PLAN FEATURE  (per-plan feature limits & toggles)
+// ERD  : t_planfeat  (x=1800, y=1500)
+// Edges: e25 ← Plan.id
+// ────────────────────────────────────────────────────────────────
+
+model PlanFeature {
+  id          String   @id @default(cuid()) @map("id")
+  planId      String   @map("plan_id")
+  name        String   @map("name") // e.g. "max_projects", "max_members"
+  description String?  @map("description")
+  limitValue  Int?     @map("limit_value") // null = unlimited
+  isEnabled   Boolean  @default(true) @map("is_enabled")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, name], map: "uq_plan_feature_plan_name")
+  @@index([planId], map: "idx_plan_features_plan_id")
+  @@index([isEnabled], map: "idx_plan_features_is_enabled")
+  @@map("plan_features")
+}

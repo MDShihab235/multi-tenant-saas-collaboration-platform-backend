@@ -1,0 +1,110 @@
+// ────────────────────────────────────────────────────────────────
+// ENUMS
+// ────────────────────────────────────────────────────────────────
+
+// Platform-level user role stored directly on the User table.
+// ADMIN  → super-admin, can manage the whole platform.
+// MEMBER → regular user, belongs to one or more organizations.
+enum UserRole {
+    ADMIN
+    MEMBER
+
+    @@map("user_role")
+}
+
+// Organization-level role stored on Membership and Invitation.
+// OWNER       → full org control, billing, can delete org.
+// ADMIN       → manage members, projects, settings.
+// MEMBER      → create / edit tasks and projects.
+// VIEWER      → read-only access across the org.
+enum MemberRole {
+    OWNER
+    ADMIN
+    MEMBER
+    VIEWER
+
+    @@map("member_role")
+}
+
+enum UserStatus {
+    ACTIVE
+    BLOCKED
+    DELETED
+}
+
+// Project-level role stored on ProjectMember.
+enum ProjectMemberRole {
+    OWNER
+    MANAGER
+    CONTRIBUTOR
+    VIEWER
+
+    @@map("project_member_role")
+}
+
+// Task lifecycle states.
+enum TaskStatus {
+    TODO
+    IN_PROGRESS
+    IN_REVIEW
+    DONE
+    CANCELED
+
+    @@map("task_status")
+}
+
+// Task urgency levels.
+enum TaskPriority {
+    LOW
+    MEDIUM
+    HIGH
+    URGENT
+
+    @@map("task_priority")
+}
+
+// In-app notification categories.
+enum NotificationType {
+    TASK_ASSIGNED
+    TASK_UPDATED
+    COMMENT_ADDED
+    MEMBER_JOINED
+    MEMBER_REMOVED
+    INVITATION_SENT
+    SUBSCRIPTION_CHANGED
+    INVOICE_PAID
+    GENERAL
+
+    @@map("notification_type")
+}
+
+// Billing lifecycle states for a Subscription.
+enum SubscriptionStatus {
+    TRIALING
+    ACTIVE
+    PAST_DUE
+    CANCELED
+    PAUSED
+    INCOMPLETE
+
+    @@map("subscription_status")
+}
+
+// Billing cadence for a Subscription.
+enum BillingCycle {
+    MONTHLY
+    YEARLY
+
+    @@map("billing_cycle")
+}
+
+// Payment document states for an Invoice.
+enum InvoiceStatus {
+    DRAFT
+    OPEN
+    PAID
+    VOID
+    UNCOLLECTIBLE
+
+    @@map("invoice_status")
+}
