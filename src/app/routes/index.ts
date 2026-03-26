@@ -1,5 +1,46 @@
 import { Router } from "express";
+import { AuthRoutes } from "../module/auth/auth.route";
+import { InvitationRoutes } from "../module/invitation/invitation.route";
+import { ActivityLogRoutes } from "../module/activityLog/activityLog.route";
+import { ApiKeyRoutes } from "../module/apiKey/apiKey.route";
+import { FileRoutes } from "../module/file/file.route";
+import { InvoiceRoutes } from "../module/invoice/invoice.route";
+import { LabelRoutes } from "../module/label/label.route";
+import { MembershipRoutes } from "../module/membership/membership.route";
+import { NotificationRoutes } from "../module/notification/notification.route";
+import { OrganizationRoutes } from "../module/organization/organization.route";
+import { PermissionRoutes } from "../module/permission/permission.route";
+import { PlanRoutes } from "../module/plan/plan.route";
+import { ProjectRoutes } from "../module/project/project.route";
+import { ProjectMemberRoutes } from "../module/projectMember/projectMember.route";
+import { RoleRoutes } from "../module/role/role.route";
+import { SubscriptionRoutes } from "../module/subscription/subscription.route";
+import { TaskRoutes } from "../module/task/task.route";
+import { TaskAttachmentRoutes } from "../module/taskAttachment/taskAttachment.route";
+import { TaskCommentRoutes } from "../module/taskComment/taskComment.route";
+import { UserRoutes } from "../module/user/user.route";
 
 const router = Router();
+
+router.use("/auth", AuthRoutes);
+router.use("/invitation", InvitationRoutes);
+router.use("/activity-log", ActivityLogRoutes);
+router.use("/api-key", ApiKeyRoutes);
+router.use("/file", FileRoutes);
+router.use("/invoice", InvoiceRoutes);
+router.use("/label", LabelRoutes);
+router.use("/membership", MembershipRoutes);
+router.use("/notification", NotificationRoutes);
+router.use("/organization", OrganizationRoutes);
+router.use("/permission", PermissionRoutes);
+router.use("/plan", PlanRoutes);
+router.use("/project", ProjectRoutes);
+router.use("/project-member", ProjectMemberRoutes);
+router.use("/role", RoleRoutes);
+router.use("/subscription", SubscriptionRoutes);
+router.use("/task", TaskRoutes);
+router.use("/task-attachment", TaskAttachmentRoutes);
+router.use("/task-comment", TaskCommentRoutes);
+router.use("/user", UserRoutes);
 
 export const IndexRoutes = router;

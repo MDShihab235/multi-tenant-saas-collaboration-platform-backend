@@ -1,101 +1,104 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// ============================================================
+//  Auth Middleware — checkAuth
+//  Project : Multi-Tenant SaaS Collaboration Platform
+//  Path    : src/app/middleware/checkAuth.ts
+// ============================================================
+
 import { NextFunction, Request, Response } from "express";
-import status from "http-status";
-import { Role, UserStatus } from "../../generated/prisma/enums";
+import httpStatus from "http-status";
+import { UserStatus } from "../../generated/prisma/enums";
 import { envVars } from "../config/env";
 import AppError from "../errorHelpers/AppError";
 import { prisma } from "../lib/prisma";
 import { CookieUtils } from "../utils/cookie";
 import { jwtUtils } from "../utils/jwt";
 
-export const checkAuth = (...authRoles: Role[]) => async (req: Request, res: Response, next: NextFunction) => {
+export const checkAuth =
+  () => async (req: Request, res: Response, next: NextFunction) => {
     try {
-        //Session Token Verification
-        const sessionToken = CookieUtils.getCookie(req, "better-auth.session_token");
+      // 1. Get Session Token from Better-Auth Cookies
+      const sessionToken = CookieUtils.getCookie(
+        req,
+        "better-auth.session_token",
+      );
 
-        if (!sessionToken) {
-            throw new Error('Unauthorized access! No session token provided.');
+      // 2. Get Access Token from custom cookies (for extra API security)
+      const accessToken = CookieUtils.getCookie(req, "accessToken");
+
+      if (!sessionToken && !accessToken) {
+        throw new AppError(
+          httpStatus.UNAUTHORIZED,
+          "Authentication required. Please log in.",
+        );
+      }
+
+      let userId: string | null = null;
+
+      // ── Primary Check: Session Token ───────────────────────────
+      if (sessionToken) {
+        const sessionData = await prisma.session.findUnique({
+          where: { token: sessionToken },
+          include: { user: true },
+        });
+
+        if (!sessionData || new Date(sessionData.expiresAt) < new Date()) {
+          throw new AppError(
+            httpStatus.UNAUTHORIZED,
+            "Session expired or invalid.",
+          );
         }
 
-        if (sessionToken) {
-            const sessionExists = await prisma.session.findFirst({
-                where: {
-                    token: sessionToken,
-                    expiresAt: {
-                        gt: new Date(),
-                    }
-                },
-                include: {
-                    user: true,
-                }
-            })
+        userId = sessionData.userId;
+        req.user = {
+          userId: sessionData.user.id,
+          email: sessionData.user.email,
+          name: sessionData.user.name || "",
+        };
+      }
+      // ── Secondary Check: JWT Access Token ──────────────────────
+      else if (accessToken) {
+        const verified = jwtUtils.verifyToken(
+          accessToken,
+          envVars.ACCESS_TOKEN_SECRET,
+        );
+        if (!verified.success) {
+          throw new AppError(httpStatus.UNAUTHORIZED, "Invalid access token.");
+        }
+        userId = verified.data!.userId;
+        req.user = verified.data;
+      }
 
-            if (sessionExists && sessionExists.user) {
-                const user = sessionExists.user;
+      // ── Critical Status Check: Is user ACTIVE? ──────────────────
+      if (userId) {
+        const userStatus = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { status: true, isDeleted: true },
+        });
 
-                const now = new Date();
-                const expiresAt = new Date(sessionExists.expiresAt)
-                const createdAt = new Date(sessionExists.createdAt)
-
-                const sessionLifeTime = expiresAt.getTime() - createdAt.getTime();
-                const timeRemaining = expiresAt.getTime() - now.getTime();
-                const percentRemaining = (timeRemaining / sessionLifeTime) * 100;
-
-                if (percentRemaining < 20) {
-                    res.setHeader('X-Session-Refresh', 'true');
-                    res.setHeader('X-Session-Expires-At', expiresAt.toISOString());
-                    res.setHeader('X-Time-Remaining', timeRemaining.toString());
-
-                    console.log("Session Expiring Soon!!");
-                }
-
-                if (user.status === UserStatus.BLOCKED || user.status === UserStatus.DELETED) {
-                    throw new AppError(status.UNAUTHORIZED, 'Unauthorized access! User is not active.');
-                }
-
-                if (user.isDeleted) {
-                    throw new AppError(status.UNAUTHORIZED, 'Unauthorized access! User is deleted.');
-                }
-
-                if (authRoles.length > 0 && !authRoles.includes(user.role)) {
-                    throw new AppError(status.FORBIDDEN, 'Forbidden access! You do not have permission to access this resource.');
-                }
-
-                req.user = {
-                    userId : user.id,
-                    role : user.role,
-                    email : user.email,
-                }
-            }
-
-            const accessToken = CookieUtils.getCookie(req, 'accessToken');
-
-            if (!accessToken) {
-                throw new AppError(status.UNAUTHORIZED, 'Unauthorized access! No access token provided.');
-            }
-
-
+        if (!userStatus || userStatus.isDeleted) {
+          throw new AppError(
+            httpStatus.UNAUTHORIZED,
+            "This account has been deleted.",
+          );
         }
 
-        //Access Token Verification
-        const accessToken = CookieUtils.getCookie(req, 'accessToken');
-
-        if (!accessToken) {
-            throw new AppError(status.UNAUTHORIZED, 'Unauthorized access! No access token provided.');
+        if (userStatus.status === UserStatus.BLOCKED) {
+          throw new AppError(
+            httpStatus.FORBIDDEN,
+            "Your account has been blocked. Contact support.",
+          );
         }
 
-        const verifiedToken = jwtUtils.verifyToken(accessToken, envVars.ACCESS_TOKEN_SECRET);
-
-        if (!verifiedToken.success) {
-            throw new AppError(status.UNAUTHORIZED, 'Unauthorized access! Invalid access token.');
+        if (userStatus.status === UserStatus.INACTIVE) {
+          throw new AppError(
+            httpStatus.FORBIDDEN,
+            "Please verify your email to activate your account.",
+          );
         }
+      }
 
-        if (authRoles.length > 0 && !authRoles.includes(verifiedToken.data!.role as Role)) {
-            throw new AppError(status.FORBIDDEN, 'Forbidden access! You do not have permission to access this resource.');
-        }
-
-        next()
-    } catch (error: any) {
-        next(error);
+      next();
+    } catch (error) {
+      next(error);
     }
-};
+  };

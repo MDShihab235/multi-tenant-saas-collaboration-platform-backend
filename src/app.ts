@@ -50,6 +50,9 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files from the uploads directory
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
 cron.schedule("*/25 * * * *", async () => {
   try {
     console.log("Running cron job to cancel unpaid appointments...");

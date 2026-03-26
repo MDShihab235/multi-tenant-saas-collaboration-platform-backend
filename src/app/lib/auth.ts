@@ -1,17 +1,21 @@
+// ============================================================
+//  Better-Auth Configuration
+//  Project : Multi-Tenant SaaS Collaboration Platform
+//  Path    : src/app/lib/auth.ts
+// ============================================================
+
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-// import { bearer, emailOTP } from "better-auth/plugins";
-// import { Role, UserStatus } from "../../generated/prisma/enums";
+import { bearer, emailOTP } from "better-auth/plugins";
 import { envVars } from "../config/env";
-// import { sendEmail } from "../utils/email";
 import { prisma } from "./prisma";
-// If your Prisma file is located elsewhere, you can change the path
+import { sendEmail } from "../utils/email";
 
 export const auth = betterAuth({
   baseURL: envVars.BETTER_AUTH_URL,
   secret: envVars.BETTER_AUTH_SECRET,
   database: prismaAdapter(prisma, {
-    provider: "postgresql", // or "mysql", "postgresql", ...etc
+    provider: "postgresql",
   }),
 
   emailAndPassword: {
@@ -19,163 +23,150 @@ export const auth = betterAuth({
     requireEmailVerification: true,
   },
 
-  // socialProviders: {
-  //   google: {
-  //     clientId: envVars.GOOGLE_CLIENT_ID,
-  //     clientSecret: envVars.GOOGLE_CLIENT_SECRET,
-  //     // callbackUrl: envVars.GOOGLE_CALLBACK_URL,
-  //     mapProfileToUser: () => {
-  //       return {
-  //         status: UserStatus.ACTIVE,
-  //         needPasswordChange: false,
-  //         emailVerified: true,
-  //         isDeleted: false,
-  //         deletedAt: null,
-  //       };
-  //     },
-  //   },
-  // },
-
-  emailVerification: {
-    sendOnSignUp: true,
-    sendOnSignIn: true,
-    autoSignInAfterVerification: true,
+  // mapping the user attributes to match your schema
+  user: {
+    additionalFields: {
+      status: { type: "string", defaultValue: "ACTIVE" },
+      needPasswordChange: { type: "boolean", defaultValue: false },
+      isDeleted: { type: "boolean", defaultValue: false },
+    },
   },
 
-  // user: {
-  //   additionalFields: {
-  //     role: {
-  //       type: "string",
-  //       required: true,
-  //       defaultValue: Role.PATIENT,
-  //     },
+  plugins: [
+    bearer(),
+    emailOTP({
+      overrideDefaultEmailVerification: true,
+      async sendVerificationOTP({ email, otp, type }) {
+        // Fetch user and their global roles if applicable
+        const user = await prisma.user.findFirst({
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            emailVerified: true,
+            // In your schema, "role" isn't a direct field, so we check memberships
+            memberships: {
+              include: { role: true },
+            },
+          },
+        });
 
-  //     status: {
-  //       type: "string",
-  //       required: true,
-  //       defaultValue: UserStatus.ACTIVE,
-  //     },
+        if (!user) return;
 
-  //     needPasswordChange: {
-  //       type: "boolean",
-  //       required: true,
-  //       defaultValue: false,
-  //     },
+        // Check if user has a SUPER_ADMIN role in any organization membership
+        const isSuperAdmin = user.memberships.some(
+          (m) => m.role.name === "SUPER_ADMIN",
+        );
+        if (isSuperAdmin) return;
 
-  //     isDeleted: {
-  //       type: "boolean",
-  //       required: true,
-  //       defaultValue: false,
-  //     },
+        if (type === "email-verification" && !user.emailVerified) {
+          await sendEmail({
+            to: email,
+            subject: "Verify your email",
+            templateName: "otp",
+            templateData: { name: user.name, otp },
+          });
+        } else if (type === "forget-password") {
+          await sendEmail({
+            to: email,
+            subject: "Password Reset OTP",
+            templateName: "otp",
+            templateData: { name: user.name, otp },
+          });
+        }
+      },
+      expiresIn: 120, // 2 minutes
+      otpLength: 6,
+    }),
+  ],
 
-  //     deletedAt: {
-  //       type: "date",
-  //       required: false,
-  //       defaultValue: null,
-  //     },
-  //   },
-  // },
+  session: {
+    expiresIn: 60 * 60 * 24 * 7,
+    updateAge: 60 * 60 * 24,
+  },
 
-  // plugins: [
-  //   bearer(),
-  //   emailOTP({
-  //     overrideDefaultEmailVerification: true,
-  //     async sendVerificationOTP({ email, otp, type }) {
-  //       if (type === "email-verification") {
-  //         const user = await prisma.user.findUnique({
-  //           where: {
-  //             email,
-  //           },
-  //         });
+  socialProviders: {
+    google: {
+      clientId: envVars.GOOGLE_CLIENT_ID as string,
+      clientSecret: envVars.GOOGLE_CLIENT_SECRET as string,
+    },
+  },
 
-  //         if (!user) {
-  //           console.error(
-  //             `User with email ${email} not found. Cannot send verification OTP.`,
-  //           );
-  //           return;
-  //         }
-
-  //         if (user && user.role === Role.SUPER_ADMIN) {
-  //           console.log(
-  //             `User with email ${email} is a super admin. Skipping sending verification OTP.`,
-  //           );
-  //           return;
-  //         }
-
-  //         if (user && !user.emailVerified) {
-  //           sendEmail({
-  //             to: email,
-  //             subject: "Verify your email",
-  //             templateName: "otp",
-  //             templateData: {
-  //               name: user.name,
-  //               otp,
-  //             },
-  //           });
-  //         }
-  //       } else if (type === "forget-password") {
-  //         const user = await prisma.user.findUnique({
-  //           where: {
-  //             email,
-  //           },
-  //         });
-
-  //         if (user) {
-  //           sendEmail({
-  //             to: email,
-  //             subject: "Password Reset OTP",
-  //             templateName: "otp",
-  //             templateData: {
-  //               name: user.name,
-  //               otp,
-  //             },
-  //           });
-  //         }
-  //       }
-  //     },
-  //     expiresIn: 2 * 60, // 2 minutes in seconds
-  //     otpLength: 6,
-  //   }),
-  // ],
-
-  // session: {
-  //   expiresIn: 60 * 60 * 60 * 24, // 1 day in seconds
-  //   updateAge: 60 * 60 * 60 * 24, // 1 day in seconds
-  //   cookieCache: {
-  //     enabled: true,
-  //     maxAge: 60 * 60 * 60 * 24, // 1 day in seconds
-  //   },
-  // },
-
-  // redirectURLs: {
-  //   signIn: `${envVars.BETTER_AUTH_URL}/api/v1/auth/google/success`,
-  // },
-
-  // trustedOrigins: [
-  //   process.env.BETTER_AUTH_URL || "http://localhost:5000",
-  //   envVars.FRONTEND_URL,
-  // ],
-
-  // advanced: {
-  //   // disableCSRFCheck: true,
-  //   useSecureCookies: false,
-  //   cookies: {
-  //     state: {
-  //       attributes: {
-  //         sameSite: "none",
-  //         secure: true,
-  //         httpOnly: true,
-  //         path: "/",
-  //       },
-  //     },
-  //     sessionToken: {
-  //       attributes: {
-  //         sameSite: "none",
-  //         secure: true,
-  //         httpOnly: true,
-  //         path: "/",
-  //       },
-  //     },
-  //   },
-  // },
+  advanced: {
+    useSecureCookies: false,
+    cookies: {
+      sessionToken: {
+        attributes: {
+          sameSite: "none",
+          secure: true,
+          httpOnly: true,
+          path: "/",
+        },
+      },
+    },
+  },
 });
+
+// ============================================================
+//  Custom OTP Wrapper Functions
+// ============================================================
+
+/**
+ * Manually trigger a verification email OTP
+ */
+export const sendVerificationEmailOTP = async (payload: {
+  body: { email: string };
+}) => {
+  // We cast the function to 'any' to avoid strict overload mismatching
+  return await (auth.api.sendVerificationOTP as any)({
+    body: {
+      email: payload.body.email,
+      type: "email-verification",
+    },
+  });
+};
+
+/**
+ * Verify the OTP sent to the user's email
+ */
+export const verifyEmailOTP = async (payload: {
+  body: { email: string; otp: string };
+}) => {
+  // Fix: Force the compiler to accept the payload structure required by emailOTP plugin
+  return await (auth.api.verifyEmail as any)({
+    body: {
+      email: payload.body.email,
+      otp: payload.body.otp,
+    },
+  });
+};
+
+/**
+ * Request an OTP for password resetting
+ */
+export const requestPasswordResetEmailOTP = async (payload: {
+  body: { email: string };
+}) => {
+  return await (auth.api.sendVerificationOTP as any)({
+    body: {
+      email: payload.body.email,
+      type: "forget-password",
+    },
+  });
+};
+
+/**
+ * Reset the user password using the verified OTP
+ */
+export const resetPasswordEmailOTP = async (payload: {
+  body: { email: string; otp: string; password: string };
+}) => {
+  // NOTE: In Better-Auth Reset Password, the 'token' field is used to pass the OTP
+  return await (auth.api.resetPassword as any)({
+    body: {
+      newPassword: payload.body.password,
+      token: payload.body.otp,
+    },
+  });
+};
