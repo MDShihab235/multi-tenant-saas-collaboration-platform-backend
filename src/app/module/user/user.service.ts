@@ -5,13 +5,12 @@
 // ============================================================
 
 import httpStatus from "http-status";
-import { UserStatus } from "../../generated/prisma";
-import { envVars } from "../config/env";
-import AppError from "../errorHelpers/AppError";
-import { IRequestUser } from "../interfaces/requestUser.interface";
-import { auth } from "../lib/auth";
-import { prisma } from "../lib/prisma";
-import { tokenUtils } from "../utils/token";
+import { UserStatus } from "../../../generated/prisma/enums";
+import AppError from "../../errorHelpers/AppError";
+import { IRequestUser } from "../../interfaces/requestUser.interface";
+import { auth } from "../../lib/auth";
+import { prisma } from "../../lib/prisma";
+import { tokenUtils } from "../../utils/token";
 import {
   IChangeOwnPasswordPayload,
   IUpdateProfilePayload,
@@ -114,7 +113,10 @@ const changeOwnPassword = async (
   });
 
   if (!session?.user) {
-    throw new AppError(httpStatus.UNAUTHORIZED, "Session is invalid or expired");
+    throw new AppError(
+      httpStatus.UNAUTHORIZED,
+      "Session is invalid or expired",
+    );
   }
 
   const { currentPassword, newPassword } = payload;
@@ -334,10 +336,7 @@ const forcePasswordChange = async (userId: string) => {
   }
 
   if (user.isDeleted) {
-    throw new AppError(
-      httpStatus.GONE,
-      "Cannot update a deleted account",
-    );
+    throw new AppError(httpStatus.GONE, "Cannot update a deleted account");
   }
 
   if (user.needPasswordChange) {

@@ -52,7 +52,7 @@ export const checkAuth =
         req.user = {
           userId: sessionData.user.id,
           email: sessionData.user.email,
-          name: sessionData.user.name || "",
+          name: sessionData.user.name,
         };
       }
       // ── Secondary Check: JWT Access Token ──────────────────────
@@ -61,11 +61,15 @@ export const checkAuth =
           accessToken,
           envVars.ACCESS_TOKEN_SECRET,
         );
-        if (!verified.success) {
+        if (!verified.success || !verified.data) {
           throw new AppError(httpStatus.UNAUTHORIZED, "Invalid access token.");
         }
-        userId = verified.data!.userId;
-        req.user = verified.data;
+        // userId = verified.data.userId;
+        req.user = {
+          userId: verified.data.userId,
+          email: verified.data.email,
+          name: verified.data.name,
+        };
       }
 
       // ── Critical Status Check: Is user ACTIVE? ──────────────────

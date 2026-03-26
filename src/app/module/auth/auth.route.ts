@@ -6,9 +6,9 @@
 
 import { Router } from "express";
 import { checkAuth } from "../../middleware/checkAuth";
-import { validateRequest } from "../../middleware/validateRequest";
+// import { validateRequest } from "../../middleware/validateRequest";
 import { AuthController } from "./auth.controller";
-import { AuthValidation } from "./auth.validation";
+// import { AuthValidation } from "./auth.validation";
 
 const router = Router();
 
@@ -19,7 +19,7 @@ const router = Router();
 // Body : { name, email, password }
 router.post(
   "/register",
-  validateRequest(AuthValidation.registerSchema),
+  // validateRequest(AuthValidation.registerSchema),
   AuthController.register,
 );
 
@@ -28,7 +28,7 @@ router.post(
 // Body : { email, password }
 router.post(
   "/login",
-  validateRequest(AuthValidation.loginSchema),
+  // validateRequest(AuthValidation.loginSchema),
   AuthController.login,
 );
 
@@ -42,7 +42,7 @@ router.post("/refresh-token", AuthController.refreshToken);
 // Body : { email, otp }
 router.post(
   "/verify-email",
-  validateRequest(AuthValidation.verifyEmailSchema),
+  // validateRequest(AuthValidation.verifyEmailSchema),
   AuthController.verifyEmail,
 );
 
@@ -51,7 +51,7 @@ router.post(
 // Body : { email }
 router.post(
   "/resend-verification",
-  validateRequest(AuthValidation.resendVerificationSchema),
+  // validateRequest(AuthValidation.resendVerificationSchema),
   AuthController.resendVerificationEmail,
 );
 
@@ -60,7 +60,7 @@ router.post(
 // Body : { email }
 router.post(
   "/forgot-password",
-  validateRequest(AuthValidation.forgotPasswordSchema),
+  // validateRequest(AuthValidation.forgotPasswordSchema),
   AuthController.forgotPassword,
 );
 
@@ -69,7 +69,7 @@ router.post(
 // Body : { email, otp, newPassword }
 router.post(
   "/reset-password",
-  validateRequest(AuthValidation.resetPasswordSchema),
+  // validateRequest(AuthValidation.resetPasswordSchema),
   AuthController.resetPassword,
 );
 
@@ -85,7 +85,7 @@ router.get("/me", checkAuth(), AuthController.getMe);
 router.patch(
   "/change-password",
   checkAuth(),
-  validateRequest(AuthValidation.changePasswordSchema),
+  // validateRequest(AuthValidation.changePasswordSchema),
   AuthController.changePassword,
 );
 

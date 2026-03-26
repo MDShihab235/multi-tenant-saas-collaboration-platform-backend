@@ -15,16 +15,21 @@ import { notFound } from "./app/middleware/notFound";
 import { IndexRoutes } from "./app/routes";
 
 const app: Application = express();
+
+// app.post(
+//   "/webhook",
+//   express.raw({ type: "application/json" }),
+//   // PaymentController.handleStripeWebhookEvent,
+// );
+// Middleware to parse JSON bodies
+app.use(express.json());
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
+
 app.set("query parser", (str: string) => qs.parse(str));
 
 app.set("view engine", "ejs");
 app.set("views", path.resolve(process.cwd(), `src/app/templates`));
-
-app.post(
-  "/webhook",
-  express.raw({ type: "application/json" }),
-  // PaymentController.handleStripeWebhookEvent,
-);
 
 app.use(
   cors({
@@ -42,28 +47,20 @@ app.use(
 
 app.use("/api/auth", toNodeHandler(auth));
 
-// Enable URL-encoded form data parsing
-app.use(express.urlencoded({ extended: true }));
-
-// Middleware to parse JSON bodies
-app.use(express.json());
-app.use(cookieParser());
-app.use(express.urlencoded({ extended: true }));
-
 // Serve static files from the uploads directory
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-cron.schedule("*/25 * * * *", async () => {
-  try {
-    console.log("Running cron job to cancel unpaid appointments...");
-    // await AppointmentService.cancelUnpaidAppointments();
-  } catch (error: any) {
-    console.error(
-      "Error occurred while canceling unpaid appointments:",
-      error.message,
-    );
-  }
-});
+// cron.schedule("*/25 * * * *", async () => {
+//   try {
+//     console.log("Running cron job to cancel unpaid appointments...");
+//     // await AppointmentService.cancelUnpaidAppointments();
+//   } catch (error: any) {
+//     console.error(
+//       "Error occurred while canceling unpaid appointments:",
+//       error.message,
+//     );
+//   }
+// });
 
 app.use("/api/v1", IndexRoutes);
 
@@ -74,8 +71,7 @@ app.get("/", async (req: Request, res: Response) => {
     message: "API is working",
   });
 });
-
-app.use(globalErrorHandler);
 app.use(notFound);
+app.use(globalErrorHandler);
 
 export default app;

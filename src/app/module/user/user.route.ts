@@ -46,18 +46,18 @@ router.delete("/me", checkAuth(), UserController.deleteMyAccount);
 
 // 5. List all platform users — paginated and filterable
 // GET /api/v1/users?page=1&limit=10&status=ACTIVE&search=john
-router.get("/", checkAuth("ADMIN"), UserController.getAllUsers);
+router.get("/", checkAuth(), UserController.getAllUsers);
 
 // 6. Get any user's full profile by their ID
 // GET /api/v1/users/:userId
-router.get("/:userId", checkAuth("ADMIN"), UserController.getUserById);
+router.get("/:userId", checkAuth(), UserController.getUserById);
 
 // 7. Change a user's account status: ACTIVE | INACTIVE | BLOCKED
 // PATCH /api/v1/users/:userId/status
 // Body : { status: "ACTIVE" | "INACTIVE" | "BLOCKED" }
 router.patch(
   "/:userId/status",
-  checkAuth("ADMIN"),
+  checkAuth(),
   validateRequest(UserValidation.updateUserStatusSchema),
   UserController.updateUserStatus,
 );
@@ -66,13 +66,13 @@ router.patch(
 // PATCH /api/v1/users/:userId/force-password
 router.patch(
   "/:userId/force-password",
-  checkAuth("ADMIN"),
+  checkAuth(),
   UserController.forcePasswordChange,
 );
 
 // 9. Permanently remove a user account and all cascade data
 // DELETE /api/v1/users/:userId
-router.delete("/:userId", checkAuth("ADMIN"), UserController.hardDeleteUser);
+router.delete("/:userId", checkAuth(), UserController.hardDeleteUser);
 
 // ─────────────────────────────────────────────────────────────
 

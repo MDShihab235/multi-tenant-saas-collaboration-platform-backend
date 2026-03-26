@@ -107,7 +107,6 @@ model User {
   id                 String     @id @default(uuid())
   name               String     @unique
   email              String
-  password           String
   image              String?    @map("avatar")
   emailVerified      Boolean    @default(false)
   status             UserStatus @default(ACTIVE)
