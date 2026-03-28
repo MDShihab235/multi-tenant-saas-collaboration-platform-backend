@@ -93,15 +93,27 @@ export const auth = betterAuth({
     },
   },
 
+  // advanced: {
+  //   useSecureCookies: false,
+  //   cookies: {
+  //     sessionToken: {
+  //       attributes: {
+  //         sameSite: "none",
+  //         secure: true,
+  //         httpOnly: true,
+  //         path: "/",
+  //       },
+  //     },
+  //   },
+  // },
   advanced: {
-    useSecureCookies: false,
+    // If testing on localhost without https, set this to false
+    useSecureCookies: process.env.NODE_ENV === "production",
     cookies: {
       sessionToken: {
         attributes: {
-          sameSite: "none",
-          secure: true,
-          httpOnly: true,
-          path: "/",
+          sameSite: "lax", // Change "none" to "lax" for local development
+          secure: process.env.NODE_ENV === "production",
         },
       },
     },

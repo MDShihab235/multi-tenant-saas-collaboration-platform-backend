@@ -271,10 +271,7 @@ const updateOrganization = async (
 // memberships, invitations, projects, tasks, labels, API keys,
 // subscriptions and activity logs — as defined by the schema's
 // onDelete: Cascade rules. Only the owner may perform this action.
-const deleteOrganization = async (
-  orgId: string,
-  requestUser: IRequestUser,
-) => {
+const deleteOrganization = async (orgId: string, requestUser: IRequestUser) => {
   const org = await prisma.organization.findUnique({
     where: { id: orgId },
   });

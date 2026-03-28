@@ -15,12 +15,12 @@ const router = Router();
 // ── Authenticated user routes ─────────────────────────────────
 
 // 1. Create a new organization — caller becomes owner
-// POST /api/v1/organizations
+// POST /api/v1/organization
 // Body : { name, slug }
 router.post(
   "/",
-  checkAuth(),
-  validateRequest(OrganizationValidation.createOrganizationSchema),
+  // checkAuth(),
+  // validateRequest(OrganizationValidation.createOrganizationSchema),
   OrganizationController.createOrganization,
 );
 
@@ -64,7 +64,7 @@ router.delete(
 // 3. List all organizations platform-wide — paginated and searchable
 // GET /api/v1/organizations?page=1&limit=10&search=acme
 // Note: registered last so "/my" and "/:orgId/stats" are matched first
-router.get("/", checkAuth("ADMIN"), OrganizationController.getAllOrganizations);
+router.get("/", checkAuth(), OrganizationController.getAllOrganizations);
 
 // ─────────────────────────────────────────────────────────────
 
