@@ -93,31 +93,31 @@ export const auth = betterAuth({
     },
   },
 
-  // advanced: {
-  //   useSecureCookies: false,
-  //   cookies: {
-  //     sessionToken: {
-  //       attributes: {
-  //         sameSite: "none",
-  //         secure: true,
-  //         httpOnly: true,
-  //         path: "/",
-  //       },
-  //     },
-  //   },
-  // },
   advanced: {
-    // If testing on localhost without https, set this to false
-    useSecureCookies: process.env.NODE_ENV === "production",
+    useSecureCookies: false,
     cookies: {
       sessionToken: {
         attributes: {
-          sameSite: "lax", // Change "none" to "lax" for local development
-          secure: process.env.NODE_ENV === "production",
+          sameSite: "none",
+          secure: true,
+          httpOnly: true,
+          path: "/",
         },
       },
     },
   },
+  // advanced: {
+  //   // If testing on localhost without https, set this to false
+  //   useSecureCookies: process.env.NODE_ENV === "production",
+  //   cookies: {
+  //     sessionToken: {
+  //       attributes: {
+  //         sameSite: "lax", // Change "none" to "lax" for local development
+  //         secure: process.env.NODE_ENV === "production",
+  //       },
+  //     },
+  //   },
+  // },
 });
 
 // ============================================================

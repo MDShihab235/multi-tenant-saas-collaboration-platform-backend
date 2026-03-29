@@ -64,7 +64,8 @@ export const checkAuth =
         if (!verified.success || !verified.data) {
           throw new AppError(httpStatus.UNAUTHORIZED, "Invalid access token.");
         }
-        // userId = verified.data.userId;
+
+        userId = verified.data.userId; // SET THIS so the status check below runs
         req.user = {
           userId: verified.data.userId,
           email: verified.data.email,

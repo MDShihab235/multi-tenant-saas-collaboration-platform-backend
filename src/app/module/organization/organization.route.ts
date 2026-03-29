@@ -19,8 +19,8 @@ const router = Router();
 // Body : { name, slug }
 router.post(
   "/",
-  // checkAuth(),
-  // validateRequest(OrganizationValidation.createOrganizationSchema),
+  checkAuth(),
+  validateRequest(OrganizationValidation.createOrganizationSchema),
   OrganizationController.createOrganization,
 );
 
