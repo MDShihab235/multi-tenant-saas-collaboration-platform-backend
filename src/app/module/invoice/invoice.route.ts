@@ -14,7 +14,7 @@ const router = Router();
 // 4. Stripe webhook handler — processes payment events (Public)
 // NOTE: Ensure this route is positioned BEFORE any express.json() middleware in your app.ts
 // or use express.raw() specifically for this route so Stripe signature verification works.
-router.post("/webhook", InvoiceController.stripeWebhookHandler);
+// router.post("/webhook", InvoiceController.stripeWebhookHandler);
 
 // 5. List all invoices platform-wide (super-admin only)
 router.get(

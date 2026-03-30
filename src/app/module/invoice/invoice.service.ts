@@ -5,6 +5,7 @@
 import status from "http-status";
 import AppError from "../../errorHelpers/AppError";
 import { prisma } from "../../lib/prisma";
+import { stripe } from "../../config/stripe.config";
 // import Stripe from "stripe";
 // const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, { apiVersion: "2023-10-16" });
 
@@ -84,28 +85,32 @@ const getInvoicePdf = async (
 };
 
 const stripeWebhookHandler = async (headers: any, rawBody: any) => {
-  // const sig = headers["stripe-signature"];
-  // let event;
+  const sig = headers["stripe-signature"];
+  let event;
 
-  // try {
-  //   event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET as string);
-  // } catch (err: any) {
-  //   throw new AppError(status.BAD_REQUEST, `Webhook Error: ${err.message}`);
-  // }
+  try {
+    event = stripe.webhooks.constructEvent(
+      rawBody,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET as string,
+    );
+  } catch (err: any) {
+    throw new AppError(status.BAD_REQUEST, `Webhook Error: ${err.message}`);
+  }
 
-  // // Handle the event
-  // switch (event.type) {
-  //   case "invoice.payment_succeeded":
-  //     const invoiceData = event.data.object;
-  //     // Update local invoice record to 'PAID'
-  //     break;
-  //   case "invoice.payment_failed":
-  //     // Update local invoice record to 'FAILED', notify user
-  //     break;
-  //   // ... handle other subscription events
-  //   default:
-  //     console.log(`Unhandled event type ${event.type}`);
-  // }
+  // Handle the event
+  switch (event.type) {
+    case "invoice.payment_succeeded":
+      const invoiceData = event.data.object;
+      // Update local invoice record to 'PAID'
+      break;
+    case "invoice.payment_failed":
+      // Update local invoice record to 'FAILED', notify user
+      break;
+    // ... handle other subscription events
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
 
   console.log("Stripe webhook received (Simulation)");
   return true;

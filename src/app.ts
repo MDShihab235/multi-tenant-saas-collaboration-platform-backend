@@ -3,24 +3,22 @@ import { toNodeHandler } from "better-auth/node";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Application, Request, Response } from "express";
-import cron from "node-cron";
 import path from "path";
 import qs from "qs";
 import { envVars } from "./app/config/env";
 import { auth } from "./app/lib/auth";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
-// import { AppointmentService } from "./app/module/appointment/appointment.service";
-// import { PaymentController } from "./app/module/payment/payment.controller";
 import { IndexRoutes } from "./app/routes";
+import { InvoiceController } from "./app/module/invoice/invoice.controller";
 
 const app: Application = express();
 
-// app.post(
-//   "/webhook",
-//   express.raw({ type: "application/json" }),
-//   // PaymentController.handleStripeWebhookEvent,
-// );
+app.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  InvoiceController.stripeWebhookHandler,
+);
 // Middleware to parse JSON bodies
 app.use(express.json());
 app.use(cookieParser());
@@ -49,18 +47,6 @@ app.use("/api/auth", toNodeHandler(auth));
 
 // Serve static files from the uploads directory
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-
-// cron.schedule("*/25 * * * *", async () => {
-//   try {
-//     console.log("Running cron job to cancel unpaid appointments...");
-//     // await AppointmentService.cancelUnpaidAppointments();
-//   } catch (error: any) {
-//     console.error(
-//       "Error occurred while canceling unpaid appointments:",
-//       error.message,
-//     );
-//   }
-// });
 
 app.use("/api/v1", IndexRoutes);
 
