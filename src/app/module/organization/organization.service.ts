@@ -215,6 +215,57 @@ const getOrganizationById = async (
   return org;
 };
 
+const getOrganizationBySlug = async (
+  slug: string,
+  requestUser: IRequestUser,
+) => {
+  const membership = await prisma.membership.findFirst({
+    where: { organization: { slug: slug }, userId: requestUser.userId },
+  });
+
+  if (!membership) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You are not a member of this organization",
+    );
+  }
+
+  const org = await prisma.organization.findUnique({
+    where: { slug },
+    include: {
+      owner: {
+        select: { id: true, name: true, email: true, image: true },
+      },
+      roles: {
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      },
+      subscription: {
+        include: {
+          plan: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              priceMonthly: true,
+              priceYearly: true,
+            },
+          },
+        },
+      },
+      _count: {
+        select: { memberships: true, projects: true, apiKeys: true },
+      },
+    },
+  });
+
+  if (!org) {
+    throw new AppError(httpStatus.NOT_FOUND, "Organization not found");
+  }
+
+  return org;
+};
+
 // ── 5. Update organization ────────────────────────────────────
 // Only the organization owner (ownerId === requestUser.userId) may
 // rename the org or change its slug. Slug uniqueness is validated
@@ -298,8 +349,15 @@ const getOrganizationStats = async (
   orgId: string,
   requestUser: IRequestUser,
 ) => {
+  // const membership = await prisma.membership.findFirst({
+  //   where: { organizationId: orgId, userId: requestUser.userId },
+  // });
+
   const membership = await prisma.membership.findFirst({
-    where: { organizationId: orgId, userId: requestUser.userId },
+    where: {
+      organizationId: orgId,
+      userId: requestUser.userId,
+    },
   });
 
   if (!membership) {
@@ -362,6 +420,7 @@ export const OrganizationService = {
   getMyOrganizations,
   getAllOrganizations,
   getOrganizationById,
+  getOrganizationBySlug,
   updateOrganization,
   deleteOrganization,
   getOrganizationStats,

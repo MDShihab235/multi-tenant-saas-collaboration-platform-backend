@@ -20,10 +20,10 @@ router.post(
 );
 
 // 2. Get current active subscription for an org
-router.get("/:orgId", checkAuth(), SubscriptionController.getSubscription);
+router.get("/:orgId", SubscriptionController.getSubscription);
 
 // 3. Current plan usage vs limits (projects, members, tasks…)
-router.get("/:orgId/usage", checkAuth(), SubscriptionController.getUsage);
+router.get("/:orgId/usage", SubscriptionController.getUsage);
 
 // 4. Upgrade to a higher-tier plan
 router.patch(

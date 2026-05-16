@@ -9,11 +9,14 @@ import { sendResponse } from "../../shared/sendResponse";
 import { ProjectService } from "./project.service";
 
 const createProject = catchAsync(async (req: Request, res: Response) => {
+  console.log("User ID from Middleware:", req.user?.userId);
+  console.log("Org Slug from Params:", req.params.orgSlug);
   const result = await ProjectService.createProject(
     req.user.userId,
-    req.params.orgId as string,
+    req.params.orgSlug as string,
     req.body,
   );
+  console.log("Project created:", result);
   sendResponse(res, {
     httpStatusCode: httpStatus.CREATED,
     success: true,

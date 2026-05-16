@@ -223,6 +223,12 @@ const getAllUsers = async (filters: IUserFilter) => {
         email: true,
         image: true,
         status: true,
+        memberships: {
+          include: {
+            organization: { select: { id: true, name: true, slug: true } },
+            role: { select: { id: true, name: true } },
+          },
+        },
         emailVerified: true,
         needPasswordChange: true,
         createdAt: true,

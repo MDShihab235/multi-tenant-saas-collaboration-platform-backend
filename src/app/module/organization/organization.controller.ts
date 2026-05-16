@@ -87,6 +87,24 @@ const getOrganizationById = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getOrganizationBySlug = catchAsync(
+  async (req: Request, res: Response) => {
+    const { slug } = req.params;
+
+    const result = await OrganizationService.getOrganizationBySlug(
+      slug as string,
+      req.user,
+    );
+
+    sendResponse(res, {
+      httpStatusCode: httpStatus.OK,
+      success: true,
+      message: "Organization fetched successfully",
+      data: result,
+    });
+  },
+);
+
 // ── 5. Update organization ────────────────────────────────────
 // PATCH /api/v1/organizations/:orgId
 // Auth  : required — owner only
@@ -156,6 +174,7 @@ export const OrganizationController = {
   getMyOrganizations,
   getAllOrganizations,
   getOrganizationById,
+  getOrganizationBySlug,
   updateOrganization,
   deleteOrganization,
   getOrganizationStats,

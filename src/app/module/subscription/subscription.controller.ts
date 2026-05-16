@@ -7,6 +7,8 @@ import httpStatus from "http-status";
 import { catchAsync } from "../../shared/catchAsync";
 import { sendResponse } from "../../shared/sendResponse";
 import { SubscriptionService } from "./subscription.service";
+import Stripe from "stripe";
+import { stripe } from "../../config/stripe.config";
 
 const subscribe = catchAsync(async (req: Request, res: Response) => {
   const result = await SubscriptionService.subscribe(
@@ -22,9 +24,52 @@ const subscribe = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const handleWebhook = async (req: Request, res: Response) => {
+  const sig = req.headers["stripe-signature"];
+
+  if (!sig) {
+    console.error("❌ Webhook Error: No Stripe signature found in headers.");
+    return res.status(400).send("No Stripe signature");
+  }
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body, // The raw buffer
+      sig as string,
+      process.env.STRIPE_WEBHOOK_SECRET!,
+    );
+  } catch (err: any) {
+    // BUG FIX: If you see this error in your console, your Webhook Secret in .env is WRONG.
+    console.error(`❌ Webhook Signature Error: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  console.log(`✅ Webhook Received: ${event.type}`);
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+
+    console.log("ℹ️ Session Metadata received:", session.metadata);
+
+    try {
+      // Execute the DB transaction
+      await SubscriptionService.handleSuccessfulSubscription(session);
+      console.log("🚀 SUCCESS: Subscription and Invoice saved to Database!");
+    } catch (err: any) {
+      // BUG FIX: If the DB fails (e.g., foreign key error, missing orgId), it logs here.
+      console.error("❌ Database sync failed in webhook:", err.message || err);
+      return res.status(500).json({ error: "Webhook DB handler failed" });
+    }
+  }
+
+  // Acknowledge receipt to Stripe
+  res.json({ received: true });
+};
+
 const getSubscription = catchAsync(async (req: Request, res: Response) => {
   const result = await SubscriptionService.getSubscription(
-    req.user.userId,
     req.params.orgId as string,
   );
   sendResponse(res, {
@@ -36,10 +81,7 @@ const getSubscription = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getUsage = catchAsync(async (req: Request, res: Response) => {
-  const result = await SubscriptionService.getUsage(
-    req.user.userId,
-    req.params.orgId as string,
-  );
+  const result = await SubscriptionService.getUsage(req.params.orgId as string);
   sendResponse(res, {
     httpStatusCode: httpStatus.OK,
     success: true,
@@ -122,6 +164,7 @@ const reactivateSubscription = catchAsync(
 
 export const SubscriptionController = {
   subscribe,
+  handleWebhook,
   getSubscription,
   getUsage,
   upgradeSubscription,

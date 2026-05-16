@@ -40,6 +40,11 @@ router.get(
 // 4. Get full details of a specific organization
 // GET /api/v1/organizations/:orgId
 router.get("/:orgId", checkAuth(), OrganizationController.getOrganizationById);
+router.get(
+  "/slug/:slug",
+  checkAuth(),
+  OrganizationController.getOrganizationBySlug,
+);
 
 // 5. Update org name or slug — owner only
 // PATCH /api/v1/organizations/:orgId

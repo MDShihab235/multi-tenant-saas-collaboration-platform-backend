@@ -52,12 +52,14 @@ const updatePlan = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deactivatePlan = catchAsync(async (req: Request, res: Response) => {
-  await PlanService.deactivatePlan(req.params.planId as string);
+  const planId = req.params.planId as string;
+  const result = await PlanService.deactivatePlan(planId);
+
   sendResponse(res, {
     httpStatusCode: httpStatus.OK,
     success: true,
     message: "Plan deactivated successfully",
-    data: null,
+    data: result,
   });
 });
 

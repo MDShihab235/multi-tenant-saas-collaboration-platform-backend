@@ -14,14 +14,14 @@ const router = Router();
 
 // 1. Create a new project inside an organization
 router.post(
-  "/:orgId",
+  "/:orgSlug",
   checkAuth(),
   validateRequest(ProjectValidation.createProjectSchema),
   ProjectController.createProject,
 );
 
 // 2. List all projects for an org (paginated, filterable)
-router.get("/:orgId", checkAuth(), ProjectController.getOrgProjects);
+router.get("/:orgIdOrSlug", checkAuth(), ProjectController.getOrgProjects);
 
 // 3. All projects the current user is a member of
 router.get("/my-projects", checkAuth(), ProjectController.getMyProjects);

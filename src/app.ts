@@ -10,14 +10,14 @@ import { auth } from "./app/lib/auth";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
 import { notFound } from "./app/middleware/notFound";
 import { IndexRoutes } from "./app/routes";
-import { InvoiceController } from "./app/module/invoice/invoice.controller";
+import { SubscriptionController } from "./app/module/subscription/subscription.controller";
 
 const app: Application = express();
 
 app.post(
-  "/webhook",
+  "/api/v1/subscription/webhook",
   express.raw({ type: "application/json" }),
-  InvoiceController.stripeWebhookHandler,
+  SubscriptionController.handleWebhook,
 );
 // Middleware to parse JSON bodies
 app.use(express.json());
